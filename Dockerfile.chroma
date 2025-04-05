@@ -1,0 +1,11 @@
+FROM ghcr.io/chroma-core/chroma:0.4.21
+
+# Pin specific numpy version compatible with Chroma 0.4.21
+RUN pip uninstall -y numpy chroma-hnswlib
+RUN pip install numpy==1.26.2
+RUN pip install chroma-hnswlib==0.7.3 
+
+# Set environment for CORS
+ENV CHROMA_SERVER_CORS_ALLOW_ORIGINS="*"
+ENV CHROMA_SERVER_HOST="0.0.0.0"
+ENV CHROMA_SERVER_PORT=8000

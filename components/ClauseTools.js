@@ -1,50 +1,30 @@
 'use client';
-
 import { useState } from 'react';
-import openai from '@/lib/openai';
 
 export default function ClauseTools({ text, onUpdate }) {
   const [loading, setLoading] = useState(false);
 
   const handleRewrite = async () => {
     setLoading(true);
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a legal assistant. Rewrite clauses to be clearer and more professional.',
-        },
-        {
-          role: 'user',
-          content: `Rewrite this clause:\n\n"${text}"`,
-        },
-      ],
+    const res = await fetch('/api/clauses/rewrite', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
     });
 
-    const newClause = res.choices[0]?.message?.content?.trim();
-    if (newClause) onUpdate(newClause);
+    const data = await res.json();
+    if (data.result) onUpdate(data.result);
     setLoading(false);
   };
 
   const handleSummarize = async () => {
     setLoading(true);
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a legal assistant. Summarize contract clauses in plain English.',
-        },
-        {
-          role: 'user',
-          content: `Summarize this clause:\n\n"${text}"`,
-        },
-      ],
+    const res = await fetch('/api/clauses/summarize', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
     });
 
-    const summary = res.choices[0]?.message?.content?.trim();
-    if (summary) alert(summary);
+    const data = await res.json();
+    if (data.result) alert(data.result);
     setLoading(false);
   };
 
