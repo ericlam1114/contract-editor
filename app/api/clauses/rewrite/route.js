@@ -9,7 +9,7 @@ export async function POST(req) {
   const { text } = await req.json();
 
   const res = await openai.chat.completions.create({
-    model: 'ft:gpt-4o-mini-2024-07-18:personal:lease-rewriter:BJ4VEzS2',
+    model: process.env.OPENAI_FINETUNED_MODEL_ID,
     messages: [
       {
         role: 'system',
