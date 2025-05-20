@@ -51,13 +51,27 @@ If you don't provide a fine-tuned model ID, the application will default to usin
 
 ### 3. Supabase Setup
 
-1. Create a new project at [Supabase](https://app.supabase.com/)
-2. From your project dashboard:
-   - Copy the project URL to `NEXT_PUBLIC_SUPA_URL` and `SUPABASE_URL`
-   - Copy the anon/public key to `NEXT_PUBLIC_SUPA_ANON`
-   - Copy the service role key to `SUPABASE_KEY` (found in Project Settings > API)
+1. Create a new project at [Supabase](https://app.supabase.com/):
+   - Sign up for a Supabase account if you don't have one
+   - Click "New Project" and follow the setup wizard
+   - Choose a name for your project and set a secure database password
 
-3. Set up the database schema:
+2. Enable the Vector extension:
+   - In your project, go to the SQL Editor
+   - Run the following command to enable vector support:
+     ```sql
+     CREATE EXTENSION IF NOT EXISTS vector;
+     ```
+   - This is required for semantic search functionality
+
+3. Copy your API credentials:
+   - From your project dashboard, click "Project Settings" (gear icon)
+   - Go to "API" tab 
+   - Copy the "Project URL" to `NEXT_PUBLIC_SUPA_URL` and `SUPABASE_URL` in your `.env.local`
+   - Copy the "anon/public" key to `NEXT_PUBLIC_SUPA_ANON` in your `.env.local`
+   - Copy the "service_role" key to `SUPABASE_KEY` in your `.env.local`
+
+4. Set up the database schema:
    - Go to the SQL Editor in your Supabase dashboard
    - Create the following tables:
 
@@ -82,9 +96,50 @@ If you don't provide a fine-tuned model ID, the application will default to usin
    );
    ```
 
-4. Create the vector search function by running the SQL code from `supabase_match_clauses.sql`
+5. Create the vector search function:
+   - In the SQL Editor, create a new query and paste the following code:
+   ```sql
+   CREATE OR REPLACE FUNCTION match_clauses (
+     query_embedding vector(1536), -- Ensure this matches your embedding dimension
+     match_threshold float DEFAULT 0.5,
+     match_count int DEFAULT 10,
+     template_filter_id uuid DEFAULT NULL,
+     is_reference_filter boolean DEFAULT NULL 
+   )
+   RETURNS TABLE (
+     id bigint,
+     text text,
+     template_id uuid,
+     similarity float
+   )
+   LANGUAGE plpgsql
+   AS $$
+   BEGIN
+     RETURN QUERY
+     SELECT
+       c.id,
+       c.text,
+       c.template_id,
+       1 - (c.embedding <=> query_embedding) AS similarity
+     FROM
+       clauses c
+     JOIN 
+       templates t ON c.template_id = t.id
+     WHERE 
+       1 - (c.embedding <=> query_embedding) > match_threshold
+       -- Compare UUIDs directly
+       AND (template_filter_id IS NULL OR c.template_id = template_filter_id) 
+       AND (is_reference_filter IS NULL OR t.is_reference = is_reference_filter) 
+     ORDER BY
+       c.embedding <=> query_embedding
+     LIMIT match_count;
+   END;
+   $$;
+   ```
 
-5. Enable Row Level Security (RLS) for your tables if your application has user authentication.
+6. Optional: Configure access controls
+   - If your application has user authentication, set up Row Level Security (RLS) for your tables
+   - For simple development setups, you can skip this step
 
 ### 4. Running the Application
 
@@ -125,3 +180,55 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Troubleshooting
+
+### Supabase Connection Issues
+
+If you encounter `TypeError: fetch failed` errors when connecting to Supabase, try the following:
+
+1. **Verify Environment Variables**:
+   - Ensure `.env.local` has the correct Supabase URL and API keys
+   - Check for typos or missing values
+   - Make sure there are no spaces around the equals sign in variable assignments
+
+2. **Enable Vector Extension**:
+   - In Supabase SQL Editor, run: `CREATE EXTENSION IF NOT EXISTS vector;`
+   - This is required for the embeddings functionality
+
+3. **Network Issues**:
+   - Ensure your network allows connections to Supabase
+   - Try running the app on a different network if possible
+
+4. **Check Supabase Status**:
+   - Visit [Supabase Status](https://status.supabase.com/) to confirm services are operational
+
+5. **Verify Database Structure**:
+   - Confirm tables are created correctly with proper column types
+   - Ensure the vector dimensions match `EMBEDDING_DIMENSION = 1536` in the code
+
+6. **Test Connection**:
+   - Run a simple query in Supabase dashboard to verify database connectivity
+   - Check that your IP is not blocked by any firewall settings
+
+7. **Restart Development Server**:
+   - Sometimes a clean restart of the Next.js dev server can resolve connection issues
+
+### OpenAI API Issues
+
+If you encounter errors with OpenAI API:
+
+1. **Verify API Key**:
+   - Ensure your OpenAI API key is correct and has sufficient credits
+   - Check usage limits in your OpenAI dashboard
+
+2. **Check Model Availability**:
+   - Confirm you have access to the models used (especially GPT-4.1)
+   - If you don't have access to GPT-4.1, modify the model names in:
+     - `/app/api/patch/route.js`
+     - `/app/api/clauses/generate/route.js`
+     - Change from `gpt-4.1` to `gpt-4` or `gpt-4o` or another available model
+
+3. **Rate Limiting**:
+   - OpenAI has rate limits that might affect performance
+   - Implement retry logic if needed for production use
